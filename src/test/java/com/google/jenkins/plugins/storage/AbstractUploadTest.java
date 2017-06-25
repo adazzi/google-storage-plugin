@@ -69,9 +69,9 @@ import com.google.jenkins.plugins.util.NotFoundException;
 
 import hudson.Extension;
 import hudson.FilePath;
-import hudson.model.AbstractBuild;
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
+import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.util.FormValidation;
 
@@ -176,7 +176,7 @@ public class AbstractUploadTest {
 
     @Override
     @Nullable
-    protected UploadSpec getInclusions(AbstractBuild<?, ?> build,
+    protected UploadSpec getInclusions(Run<?, ?> build,
         FilePath workspace, TaskListener listener) throws UploadException {
       return uploads;
     }
@@ -194,6 +194,7 @@ public class AbstractUploadTest {
         super(FakeUpload.class);
       }
 
+      @Override
       public String getDisplayName() {
         return "asdf";
       }
@@ -318,7 +319,7 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(SUBDIR_FILENAME));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -344,7 +345,7 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(PREFIX_STRIPPED_FILENAME));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
 
     BuildGcsUploadReport buildReport = BuildGcsUploadReport.of(build);
     assertNotNull(buildReport);
@@ -376,7 +377,7 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(SUBDIR_FILENAME)); // full, non-stripped filename
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -402,7 +403,7 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(PREFIX_STRIPPED_FILENAME));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -430,7 +431,7 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(SUBDIR_FILENAME)); // full, non-stripped filename
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -456,7 +457,7 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(FILENAME));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -482,7 +483,7 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(STORAGE_PREFIX + "/" + FILENAME));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -510,9 +511,9 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(FILENAME));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
-  
+
   @Test(expected = UploadException.class)
   public void testRetryOnFailureStillFails() throws Exception {
     final boolean sharedPublicly = false;
@@ -538,16 +539,16 @@ public class AbstractUploadTest {
     executor.throwWhen(Storage.Objects.Insert.class,
         new IOException("should trigger failure"));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
-  
+
   @Test
   public void testRetryOn401() throws Exception {
     final boolean sharedPublicly = false;
     final boolean forFailedJobs = true;
     final boolean showInline = false;
     final String pathPrefix = null;
-    
+
     Bucket bucket = new Bucket();
     bucket.setName(BUCKET_NAME);
     bucket.setDefaultObjectAcl(Lists.newArrayList(new ObjectAccessControl()));
@@ -574,16 +575,16 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Objects.Insert.class,
         checkObjectName(FILENAME2));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
-  
+
   @Test(expected = UploadException.class)
   public void testRetryOn401StillFails() throws Exception {
     final boolean sharedPublicly = false;
     final boolean forFailedJobs = true;
     final boolean showInline = false;
     final String pathPrefix = null;
-    
+
     Bucket bucket = new Bucket();
     bucket.setName(BUCKET_NAME);
     bucket.setDefaultObjectAcl(Lists.newArrayList(new ObjectAccessControl()));
@@ -597,10 +598,10 @@ public class AbstractUploadTest {
         new MockUploadModule(executor), /* no retries */
         FAKE_DETAILS,
         uploads);
-    
+
     int maxRetriesPlus1 =
         AbstractUpload.MAX_REMOTE_CREDENTIAL_EXPIRED_RETRIES + 1;
-    
+
     for (int i = 0; i < maxRetriesPlus1; i++) {
       executor.when(Storage.Buckets.Get.class, bucket);
       executor.throwWhen(Storage.Objects.Insert.class,
@@ -608,7 +609,7 @@ public class AbstractUploadTest {
           checkObjectName(FILENAME));
     }
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -625,7 +626,7 @@ public class AbstractUploadTest {
         null /* uploads */);
 
     // Verify that we see no RPCs by pushing nothing into the MockExecutor
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -649,7 +650,7 @@ public class AbstractUploadTest {
         checkBucketName(BUCKET_NAME));
     // No object insertions
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -677,7 +678,7 @@ public class AbstractUploadTest {
         checkBucketName(BUCKET_NAME));
     executor.when(Storage.Buckets.Get.class, bucket);
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test(expected = UploadException.class)
@@ -699,7 +700,7 @@ public class AbstractUploadTest {
     executor.throwWhen(Storage.Buckets.Get.class,
         new IOException("test"));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -727,7 +728,7 @@ public class AbstractUploadTest {
         // Verify there isn't a double-'/'
         checkObjectName(STORAGE_PREFIX + "/" + FILENAME));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -774,7 +775,7 @@ public class AbstractUploadTest {
           }
         });
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -810,7 +811,7 @@ public class AbstractUploadTest {
           }
         });
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test(expected = UploadException.class)
@@ -835,7 +836,7 @@ public class AbstractUploadTest {
     executor.passThruWhen(Storage.Buckets.Insert.class,
         checkBucketName(BUCKET_NAME));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test

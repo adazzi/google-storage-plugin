@@ -15,6 +15,7 @@
  */
 package com.google.jenkins.plugins.storage;
 
+import java.io.File;
 import java.io.IOException;
 
 import javax.annotation.Nullable;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.when;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.rules.Verifier;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.WithoutJenkins;
@@ -44,13 +46,13 @@ import com.google.api.services.storage.model.Bucket;
 import com.google.common.base.Predicate;
 import com.google.jenkins.plugins.credentials.oauth.GoogleOAuth2ScopeRequirement;
 import com.google.jenkins.plugins.credentials.oauth.GoogleRobotCredentials;
-import com.google.jenkins.plugins.storage.ClassicUpload.DescriptorImpl;
 import com.google.jenkins.plugins.util.ConflictException;
 import com.google.jenkins.plugins.util.ForbiddenException;
 import com.google.jenkins.plugins.util.MockExecutor;
 import com.google.jenkins.plugins.util.NotFoundException;
 
 import hudson.Extension;
+import hudson.FilePath;
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
 import hudson.model.TaskListener;
@@ -62,6 +64,11 @@ import hudson.util.FormValidation;
 public class AbstractBucketLifecycleManagerTest {
   @Rule
   public JenkinsRule jenkins = new JenkinsRule();
+
+  @Rule
+  public TemporaryFolder tempDir = new TemporaryFolder();
+
+  private FilePath workspace;
 
   @Mock
   private GoogleRobotCredentials credentials;
@@ -167,6 +174,7 @@ public class AbstractBucketLifecycleManagerTest {
         super(FakeUpload.class);
       }
 
+      @Override
       public String getDisplayName() {
         return "asdf";
       }
@@ -205,6 +213,8 @@ public class AbstractBucketLifecycleManagerTest {
     notFoundException = new NotFoundException();
     conflictException = new ConflictException();
     forbiddenException = new ForbiddenException();
+
+    workspace = new FilePath(makeTempDir("workspace"));
   }
 
   @Test
@@ -232,7 +242,7 @@ public class AbstractBucketLifecycleManagerTest {
     executor.passThruWhen(Storage.Buckets.Update.class,
         checkSameBucket(bucket));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -247,7 +257,7 @@ public class AbstractBucketLifecycleManagerTest {
     // A get that passes our check should incur no further RPC
     executor.when(Storage.Buckets.Get.class, bucket);
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -267,7 +277,7 @@ public class AbstractBucketLifecycleManagerTest {
     executor.passThruWhen(Storage.Buckets.Update.class,
         checkSameBucket(bucket));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test(expected = UploadException.class)
@@ -279,7 +289,7 @@ public class AbstractBucketLifecycleManagerTest {
 
     executor.throwWhen(Storage.Buckets.Get.class, conflictException);
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test(expected = UploadException.class)
@@ -291,7 +301,7 @@ public class AbstractBucketLifecycleManagerTest {
 
     executor.throwWhen(Storage.Buckets.Get.class, new IOException("test"));
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -316,6 +326,12 @@ public class AbstractBucketLifecycleManagerTest {
     // Multi-part not allowed for bucket lifecycle plugins
     assertEquals(FormValidation.Kind.ERROR,
         descriptor.doCheckBucketNameWithVars("gs://foo/bar").kind);
+  }
+
+  private File makeTempDir(String name) throws IOException {
+    File dir = new File(tempDir.getRoot(), name);
+    dir.mkdir();
+    return dir;
   }
 
   private static final String PROJECT_ID = "foo.com:bar-baz";

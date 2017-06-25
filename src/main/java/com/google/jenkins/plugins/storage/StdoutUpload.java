@@ -34,8 +34,8 @@ import com.google.jenkins.plugins.util.Resolve;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.console.PlainTextConsoleOutputStream;
-import hudson.model.AbstractBuild;
 import hudson.model.Result;
+import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.util.FormValidation;
 
@@ -96,7 +96,7 @@ public class StdoutUpload extends AbstractUpload {
    */
   @Override
   @Nullable
-  protected UploadSpec getInclusions(AbstractBuild<?, ?> build,
+  protected UploadSpec getInclusions(Run<?, ?> build,
       FilePath workspace, TaskListener listener) throws UploadException {
     try {
       OutputStream outputStream = null;

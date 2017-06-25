@@ -23,7 +23,8 @@ import javax.annotation.Nullable;
 import com.google.api.client.util.Sets;
 
 import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
+import hudson.model.Job;
+import hudson.model.Run;
 
 /**
  * A build {@link hudson.model.Action} to surface direct links of objects
@@ -36,7 +37,7 @@ public class BuildGcsUploadReport extends AbstractGcsUploadReport {
   private final Set<String> buckets;
   private final Set<String> files;
 
-  public BuildGcsUploadReport(AbstractBuild<?, ?> build) {
+  public BuildGcsUploadReport(Run<?, ?> build) {
     super(build);
     this.buckets = Sets.newHashSet();
     this.files = Sets.newHashSet();
@@ -49,7 +50,7 @@ public class BuildGcsUploadReport extends AbstractGcsUploadReport {
    *         by {@link #of(AbstractBuild)}, or null of no build existed.
    */
   @Nullable
-  public static BuildGcsUploadReport of(AbstractProject<?, ?> project) {
+  public static BuildGcsUploadReport of(Job<?, ?> project) {
     // TODO(nghia) : Put more thoughts into whether we want getLastBuild()
     // or getLastSuccessfulBuild() here.
     //
@@ -61,7 +62,7 @@ public class BuildGcsUploadReport extends AbstractGcsUploadReport {
     //
     // May we only display the last build _if_ the project has uploads for
     // failed build as well?
-    AbstractBuild<?, ?> lastBuild = project.getLastBuild();
+    Run<?, ?> lastBuild = project.getLastBuild();
     return lastBuild == null ? null : BuildGcsUploadReport.of(lastBuild);
   }
 
@@ -72,7 +73,7 @@ public class BuildGcsUploadReport extends AbstractGcsUploadReport {
    *         create a new {@link BuildGcsUploadReport} and return.
    */
   public static synchronized BuildGcsUploadReport of(
-      AbstractBuild<?, ?> build) {
+      Run<?, ?> build) {
     BuildGcsUploadReport links =
         build.getAction(BuildGcsUploadReport.class);
     if (links != null) {

@@ -68,10 +68,10 @@ import hudson.DescriptorExtensionList;
 import hudson.ExtensionPoint;
 import hudson.FilePath;
 import hudson.Util;
-import hudson.model.AbstractBuild;
 import hudson.model.Describable;
 import hudson.model.Hudson;
 import hudson.model.Result;
+import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.remoting.Callable;
 
@@ -149,9 +149,9 @@ public abstract class AbstractUpload
    * bucket.
    */
   public final void perform(GoogleRobotCredentials credentials,
-      AbstractBuild<?, ?> build, TaskListener listener)
+      Run<?, ?> run, FilePath workspace, TaskListener listener)
       throws UploadException {
-    if (!forResult(build.getResult())) {
+    if (!forResult(run.getResult())) {
       // Don't upload for the given build state.
       return;
     }
@@ -160,7 +160,7 @@ public abstract class AbstractUpload
       // Turn paths containing things like $BUILD_NUMBER and $JOB_NAME into
       // their fully resolved forms.
       String bucketNameResolvedVars = Util.replaceMacro(
-          getBucket(), build.getEnvironment(listener));
+          getBucket(), run.getEnvironment(listener));
 
       if (!bucketNameResolvedVars.startsWith(GCS_SCHEME)) {
         listener.error(module.prefix(
@@ -173,13 +173,13 @@ public abstract class AbstractUpload
           bucketNameResolvedVars.substring(GCS_SCHEME.length());
 
       UploadSpec uploads = getInclusions(
-          build, checkNotNull(build.getWorkspace()), listener);
+          run, checkNotNull(workspace), listener);
 
       if (uploads != null) {
-        BuildGcsUploadReport links = BuildGcsUploadReport.of(build);
+        BuildGcsUploadReport links = BuildGcsUploadReport.of(run);
         links.addBucket(bucketNameResolvedVars);
 
-        initiateUploadsAtWorkspace(credentials, build, bucketNameResolvedVars,
+        initiateUploadsAtWorkspace(credentials, run, bucketNameResolvedVars,
             uploads, listener);
       }
     } catch (InterruptedException e) {
@@ -216,7 +216,7 @@ public abstract class AbstractUpload
    */
   @Nullable
   protected abstract UploadSpec getInclusions(
-      AbstractBuild<?, ?> build, FilePath workspace, TaskListener listener)
+      Run<?, ?> build, FilePath workspace, TaskListener listener)
       throws UploadException;
 
   /**
@@ -243,8 +243,8 @@ public abstract class AbstractUpload
    *
    * NOTE: This can be overriden to surface additional (or less) information.
    */
-  protected Map<String, String> getMetadata(AbstractBuild<?, ?> build) {
-    return MetadataContainer.of(build).getSerializedMetadata();
+  protected Map<String, String> getMetadata(Run<?, ?> run) {
+    return MetadataContainer.of(run).getSerializedMetadata();
   }
 
   /**
@@ -327,6 +327,7 @@ public abstract class AbstractUpload
    * Boilerplate, see:
    * https://wiki.jenkins-ci.org/display/JENKINS/Defining+a+new+extension+point
    */
+  @Override
   public AbstractUploadDescriptor getDescriptor() {
     return (AbstractUploadDescriptor) checkNotNull(Hudson.getInstance())
         .getDescriptor(getClass());
@@ -341,7 +342,7 @@ public abstract class AbstractUpload
    */
   private void initiateUploadsAtWorkspace(
       final GoogleRobotCredentials credentials,
-      final AbstractBuild build, String storagePrefix,
+      final Run<?, ?> run, String storagePrefix,
       final UploadSpec uploads,
       final TaskListener listener) throws UploadException {
     try {
@@ -358,7 +359,7 @@ public abstract class AbstractUpload
       final String objectPrefix = (halves.length == 1) ? "" : halves[1];
 
       // Within the workspace, upload all of the files.
-      final Map<String, String> metadata = getMetadata(build);
+      final Map<String, String> metadata = getMetadata(run);
 
       try {
           // Use remotable credential to access the storage service from the
@@ -372,7 +373,7 @@ public abstract class AbstractUpload
                 public Void call() throws UploadException {
                   performUploads(metadata, bucketName, objectPrefix,
                       remoteCredentials, uploads, listener);
-                  return (Void) null;
+                  return null;
                 }
 
                 @Override
@@ -389,7 +390,7 @@ public abstract class AbstractUpload
 
 
       // We can't do this over the wire, so do it in bulk here
-      BuildGcsUploadReport report = BuildGcsUploadReport.of(build);
+      BuildGcsUploadReport report = BuildGcsUploadReport.of(run);
       for (FilePath include : uploads.inclusions) {
         report.addUpload(getStrippedFilename(
             getRelative(include, uploads.workspace)), storagePrefix);
@@ -412,10 +413,10 @@ public abstract class AbstractUpload
   private void performUploads(Map<String, String> metadata, String bucketName,
       String objectPrefix, GoogleRobotCredentials credentials,
       UploadSpec uploads, TaskListener listener) throws UploadException {
-    
+
     Queue<FilePath> paths = new LinkedList<>(uploads.inclusions);
     int credRefreshesRemaining = MAX_REMOTE_CREDENTIAL_EXPIRED_RETRIES;
-    
+
     do {
       try {
         Storage service = module.getStorageService(credentials);
@@ -425,14 +426,14 @@ public abstract class AbstractUpload
         // attach its default ACLs to the objects we upload.
         Bucket bucket = getOrCreateBucket(service, credentials, executor,
             bucketName);
-        
+
         while (!paths.isEmpty()) {
           FilePath include = paths.peek();
           String relativePath = getRelative(include, uploads.workspace);
           String uploadedFileName = getStrippedFilename(relativePath);
           String finalName = FilenameUtils.separatorsToUnix(
               FilenameUtils.concat(objectPrefix, uploadedFileName));
-   
+
           StorageObject object = new StorageObject()
               .setName(finalName)
               .setContentDisposition(
@@ -446,7 +447,7 @@ public abstract class AbstractUpload
             object.setAcl(addPublicReadAccess(
                 getDefaultObjectAcl(bucket, listener)));
           }
-          
+
           // Give clients an opportunity to decorate the storage
           // object before we store it.
           annotateObject(object, listener);
@@ -454,7 +455,7 @@ public abstract class AbstractUpload
           // Log that we are uploading the file and begin executing the upload.
           listener.getLogger().println(module.prefix(
               Messages.AbstractUpload_Uploading(relativePath)));
-          
+
           performUploadWithRetry(executor, service, bucket, object, include);
           paths.remove();
           credRefreshesRemaining = MAX_REMOTE_CREDENTIAL_EXPIRED_RETRIES;
@@ -656,7 +657,7 @@ public abstract class AbstractUpload
    */
   public static String getRelative(FilePath include, FilePath workspace)
       throws UploadException {
-    LinkedList<String> segments = new LinkedList<String>();
+    LinkedList<String> segments = new LinkedList<>();
     while (!include.equals(workspace)) {
       segments.push(include.getName());
       include = include.getParent();

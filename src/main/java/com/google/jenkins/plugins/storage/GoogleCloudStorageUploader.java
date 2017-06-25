@@ -22,6 +22,7 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
+import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -31,25 +32,26 @@ import static com.google.jenkins.plugins.storage.AbstractUploadDescriptor.GCS_SC
 import com.google.common.collect.ImmutableList;
 import com.google.jenkins.plugins.credentials.domains.RequiresDomain;
 import com.google.jenkins.plugins.credentials.oauth.GoogleRobotCredentials;
-import com.google.jenkins.plugins.storage.reports.ProjectGcsUploadReport;
 
 import hudson.Extension;
+import hudson.FilePath;
 import hudson.Launcher;
-import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
-import hudson.model.Action;
-import hudson.model.BuildListener;
 import hudson.model.Result;
+import hudson.model.Run;
+import hudson.model.TaskListener;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.BuildStepMonitor;
 import hudson.tasks.Publisher;
 import hudson.tasks.Recorder;
+import jenkins.tasks.SimpleBuildStep;
 
 /**
  * A Jenkins plugin for uploading files to Google Cloud Storage (GCS).
  */
 @RequiresDomain(value = StorageScopeRequirement.class)
-public class GoogleCloudStorageUploader extends Recorder {
+public class GoogleCloudStorageUploader extends Recorder
+    implements SimpleBuildStep {
   /**
    * Construct the GCS uploader to use the provided credentials to
    * upload build artifacts.
@@ -98,26 +100,26 @@ public class GoogleCloudStorageUploader extends Recorder {
    * {@inheritDoc}
    */
   @Override
-  public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
-      BuildListener listener) throws IOException, InterruptedException {
+  public void perform(Run<?, ?> run, FilePath workspace,
+      Launcher launcher, TaskListener listener
+      ) throws InterruptedException, IOException {
     GoogleRobotCredentials credentials = getCredentials();
 
     // TODO(mattmoor): threadpool?
-    boolean result = true;
     for (AbstractUpload upload : uploads) {
       try {
-        upload.perform(credentials, build, listener);
+        upload.perform(credentials, run, workspace, listener);
       } catch (UploadException e) {
         e.printStackTrace(listener.error(
             Messages.UploadModule_PrefixFormat(
                 getDescriptor().getDisplayName(),
                 Messages.GoogleCloudStorageUploader_ExceptionDuringUpload(
                     e.getMessage()))));
-        build.setResult(Result.FAILURE);
-        result = false;
+        run.setResult(Result.FAILURE);
       }
     }
-    return result;
+
+    run.addAction(new GoogleCloudStorageLastAction(run.getParent()));
   }
 
   /**
@@ -140,7 +142,7 @@ public class GoogleCloudStorageUploader extends Recorder {
    * Descriptor for the extension for uploading build artifacts to
    * Google Cloud Storage.
    */
-  @Extension
+  @Extension @Symbol("google-storage")
   public static final class DescriptorImpl
       extends BuildStepDescriptor<Publisher> {
     /**
@@ -179,13 +181,5 @@ public class GoogleCloudStorageUploader extends Recorder {
     public List<AbstractUploadDescriptor> getUploads() {
       return AbstractUpload.all();
     }
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public Action getProjectAction(AbstractProject<?, ?> project) {
-    return new ProjectGcsUploadReport(project);
   }
 }

@@ -15,6 +15,9 @@
  */
 package com.google.jenkins.plugins.storage;
 
+import java.io.File;
+import java.io.IOException;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -24,6 +27,7 @@ import static org.mockito.Mockito.when;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.rules.Verifier;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.WithoutJenkins;
@@ -44,6 +48,7 @@ import com.google.jenkins.plugins.util.ForbiddenException;
 import com.google.jenkins.plugins.util.MockExecutor;
 import com.google.jenkins.plugins.util.NotFoundException;
 
+import hudson.FilePath;
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
 import hudson.model.TaskListener;
@@ -55,6 +60,11 @@ public class ExpiringBucketLifecycleManagerTest {
 
   @org.junit.Rule
   public JenkinsRule jenkins = new JenkinsRule();
+
+  @org.junit.Rule
+  public TemporaryFolder tempDir = new TemporaryFolder();
+
+  private FilePath workspace;
 
   @Mock
   private GoogleRobotCredentials credentials;
@@ -138,6 +148,8 @@ public class ExpiringBucketLifecycleManagerTest {
     underTest = new ExpiringBucketLifecycleManager(BUCKET_URI,
         new MockUploadModule(executor), TTL,
         null /* legacy arg */, null /* legacy arg */);
+
+    workspace = new FilePath(makeTempDir("workspace"));
   }
 
   @Test
@@ -167,7 +179,7 @@ public class ExpiringBucketLifecycleManagerTest {
     executor.passThruWhen(Storage.Buckets.Update.class,
         checkHasOneRuleLifecycle());
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -184,7 +196,7 @@ public class ExpiringBucketLifecycleManagerTest {
     executor.passThruWhen(Storage.Buckets.Update.class,
         checkHasOneRuleLifecycle());
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -204,7 +216,7 @@ public class ExpiringBucketLifecycleManagerTest {
     executor.passThruWhen(Storage.Buckets.Update.class,
         checkHasOneRuleLifecycle());
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -221,7 +233,7 @@ public class ExpiringBucketLifecycleManagerTest {
     executor.passThruWhen(Storage.Buckets.Update.class,
         checkHasOneRuleLifecycle());
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -238,7 +250,7 @@ public class ExpiringBucketLifecycleManagerTest {
     executor.passThruWhen(Storage.Buckets.Update.class,
         checkHasOneRuleLifecycle());
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -257,7 +269,7 @@ public class ExpiringBucketLifecycleManagerTest {
     executor.passThruWhen(Storage.Buckets.Update.class,
         checkHasOneRuleLifecycle());
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
   }
 
   @Test
@@ -272,7 +284,13 @@ public class ExpiringBucketLifecycleManagerTest {
     // A get that returns a bucket should trigger a check/decorate/update
     executor.when(Storage.Buckets.Get.class, bucket);
 
-    underTest.perform(credentials, build, TaskListener.NULL);
+    underTest.perform(credentials, build, workspace, TaskListener.NULL);
+  }
+
+  private File makeTempDir(String name) throws IOException {
+    File dir = new File(tempDir.getRoot(), name);
+    dir.mkdir();
+    return dir;
   }
 
   private static final String PROJECT_ID = "foo.com:bar-baz";

@@ -31,8 +31,8 @@ import com.google.jenkins.plugins.util.ExecutorException;
 import com.google.jenkins.plugins.util.NotFoundException;
 
 import hudson.FilePath;
-import hudson.model.AbstractBuild;
 import hudson.model.Hudson;
+import hudson.model.Run;
 import hudson.model.TaskListener;
 
 /**
@@ -78,7 +78,7 @@ public abstract class AbstractBucketLifecycleManager extends AbstractUpload {
    */
   @Override
   @Nullable
-  protected final UploadSpec getInclusions(AbstractBuild<?, ?> build,
+  protected final UploadSpec getInclusions(Run<?, ?> build,
       FilePath workspace, TaskListener listener) throws UploadException {
     // Return an empty list, we don't actually do any uploads.
     return new UploadSpec(workspace, ImmutableList.<FilePath>of());
@@ -170,6 +170,7 @@ public abstract class AbstractBucketLifecycleManager extends AbstractUpload {
    * Boilerplate, see:
    * https://wiki.jenkins-ci.org/display/JENKINS/Defining+a+new+extension+point
    */
+  @Override
   public AbstractBucketLifecycleManagerDescriptor getDescriptor() {
     return (AbstractBucketLifecycleManagerDescriptor)
         checkNotNull(Hudson.getInstance()).getDescriptor(getClass());
